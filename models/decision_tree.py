@@ -6,9 +6,6 @@ class DecisionTreeModel:
         self.model = None
         
     def train(self, X_train, y_train):
-        """
-        Huấn luyện mô hình Decision Tree với Grid Search
-        """
         param_grid = {
             'max_depth': [3, 5, 7, 10],
             'min_samples_split': [2, 5, 10],
