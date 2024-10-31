@@ -39,13 +39,7 @@ class StockDataManager:
         tuple: (start_date, end_date)
         """
         end_date = datetime.now()
-        if existing_data is not None and not existing_data.empty:
-            last_date = existing_data.index.max()
-            if last_date.date() >= end_date.date():
-                return None, None
-            start_date = last_date + timedelta(days=1)
-        else:
-            start_date = end_date - timedelta(days=30 * months_back)
+        start_date = end_date - timedelta(days=30 * months_back)
         
         return start_date, end_date
     
@@ -61,35 +55,20 @@ class StockDataManager:
         Returns:
         pd.DataFrame: Dữ liệu đã cập nhật
         """
-        # Tải dữ liệu hiện có
-        existing_data = self.load_existing_data(symbol)
-        
-        # Xác định khoảng thời gian cần lấy dữ liệu
-        start_date, end_date = self.get_required_date_range(existing_data, months_back)
-        
-        if start_date is None:  # Dữ liệu đã cập nhật
-            return existing_data
-        
-        # Lấy dữ liệu mới
+        # Lấy dữ liệu hoàn toàn mới
         new_data = data_loader.get_stock_data(symbol)
         
         # Lọc dữ liệu trong khoảng thời gian cần thiết
-        new_data = new_data[new_data.index >= start_date]
+        start_date, end_date = self.get_required_date_range(None, months_back)
+        new_data = new_data[(new_data.index >= start_date) & (new_data.index <= end_date)]
         
-        if existing_data is not None:
-            # Kết hợp dữ liệu cũ và mới
-            combined_data = pd.concat([existing_data, new_data])
-            # Loại bỏ các dòng trùng lặp
-            combined_data = combined_data[~combined_data.index.duplicated(keep='last')]
-            # Sắp xếp theo ngày
-            final_data = combined_data.sort_index()
-        else:
-            final_data = new_data.sort_index()
+        # Sắp xếp theo ngày
+        new_data = new_data.sort_index()
         
         # Lưu dữ liệu
-        self.save_stock_data(symbol, final_data)
+        self.save_stock_data(symbol, new_data)
         
-        return final_data
+        return new_data
     
     def save_stock_data(self, symbol, data):
         """Lưu dữ liệu vào file CSV"""

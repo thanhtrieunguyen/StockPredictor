@@ -3,6 +3,7 @@ import tensorflow as tf
 from tensorflow.keras.models import Sequential
 from tensorflow.keras.layers import LSTM, Dense, Dropout
 from tensorflow.keras.optimizers import Adam
+from tensorflow.keras.layers import Input
 
 from sklearn.preprocessing import MinMaxScaler
 import pandas as pd
@@ -14,20 +15,19 @@ class LSTMModel:
         self.sequence_length = 10  # Number of time steps to look back
         
     def create_sequences(self, X, y=None):
-        """Create sequences for LSTM input"""
         sequences = []
         targets = []
         
         for i in range(len(X) - self.sequence_length):
             seq = X[i:(i + self.sequence_length)]
-            sequences.append(seq)
-            if y is not None:
-                targets.append(y[i + self.sequence_length])
-                
-        if y is not None:
-            return np.array(sequences), np.array(targets)
-        return np.array(sequences)
-    
+            if len(seq) == self.sequence_length:
+                sequences.append(seq)
+                if y is not None:
+                    targets.append(y.iloc[i + self.sequence_length])
+
+        
+        return np.array(sequences), np.array(targets)
+
     def train(self, X_train, y_train):
         # Scale features
         X_scaled = self.scaler.fit_transform(X_train)
@@ -35,16 +35,21 @@ class LSTMModel:
         # Create sequences
         X_seq, y_seq = self.create_sequences(X_scaled, y_train)
         
+        # Ensure X_seq and y_seq have the same length
+        min_length = min(len(X_seq), len(y_seq))
+        X_seq = X_seq[:min_length]
+        y_seq = y_seq[:min_length]
+        
         # Define model architecture
         self.model = Sequential([
-            LSTM(50, activation='relu', return_sequences=True, 
-                 input_shape=(self.sequence_length, X_train.shape[1])),
+            Input(shape=(self.sequence_length, X_train.shape[1])),
+            LSTM(50, activation='relu', return_sequences=True),
             Dropout(0.2),
             LSTM(50, activation='relu'),
             Dropout(0.2),
             Dense(32, activation='relu'),
             Dropout(0.2),
-            Dense(1, activation='sigmoid')
+            Dense(1, activation='linear')
         ])
         
         # Compile model
@@ -54,23 +59,29 @@ class LSTMModel:
             metrics=['accuracy']
         )
         
-        # Train model with early stopping
-        early_stopping = tf.keras.callbacks.EarlyStopping(
-            monitor='val_loss',
-            patience=10,
-            restore_best_weights=True
-        )
+        # Train model
+        batch_size = 32
+        num_batches = len(X_seq) // batch_size
         
-        self.model.fit(
-            X_seq, y_seq,
-            epochs=50,
-            batch_size=32,
-            validation_split=0.2,
-            callbacks=[early_stopping],
-            verbose=1
-        )
-        
+        for epoch in range(50):
+            epoch_loss = 0
+            for i in range(0, len(X_seq), batch_size):
+                batch_x = X_seq[i:i+batch_size]
+                batch_y = y_seq[i:i+batch_size]
+                loss, _ = self.train_step(batch_x, batch_y)
+                epoch_loss += loss
+            print(f"Epoch {epoch+1}/{50}, Loss: {epoch_loss/num_batches:.4f}")
+            
         return self.model
+
+    @tf.function(reduce_retracing=True)
+    def train_step(self, x, y):
+        with tf.GradientTape() as tape:
+            y_pred = self.model(x, training=True)
+            loss = tf.keras.losses.MeanSquaredError()(y, y_pred)
+        gradients = tape.gradient(loss, self.model.trainable_variables)
+        self.model.optimizer.apply_gradients(zip(gradients, self.model.trainable_variables))
+        return loss, y_pred
     
     def predict(self, X):
         # Scale features
@@ -81,7 +92,6 @@ class LSTMModel:
         
         if len(X_seq) == 0:
             # Handle case where X is shorter than sequence length
-            # Pad with zeros or last known values
             pad_length = self.sequence_length - len(X)
             if pad_length > 0:
                 padding = np.zeros((pad_length, X.shape[1]))
@@ -91,8 +101,7 @@ class LSTMModel:
         # Get predictions
         predictions = self.model.predict(X_seq)
         
-        # Convert probabilities to binary predictions
-        return (predictions > 0.5).astype(int).flatten()
+        return predictions.flatten()
     
     def predict_proba(self, X):
         # Scale features
