@@ -1,49 +1,49 @@
 import requests
-import pandas as pd
-from datetime import datetime
 import config
+import pandas as pd
 
 class DataLoader:
     def __init__(self):
-        self.api_key = config.ALPHA_VANTAGE_API_KEY
-        self.base_url = config.BASE_URL
+        self.api_key = config.TWELVE_DATA_API_KEY
+        self.base_url = "https://api.twelvedata.com"
 
-    def get_stock_data(self, symbol, interval='daily', output_size='full', market='USD'):
+    def get_stock_data(self, symbol, interval='1day', outputsize='5000', output_format='pandas'):
         """
-        Retrieve stock data from the Alpha Vantage API.
+        Retrieve stock data from the Twelve Data API.
         """
         params = {
-            'function': f'TIME_SERIES_{interval.upper()}',
             'symbol': symbol,
-            'market': market,
+            'interval': interval,
+            'outputsize': outputsize,
             'apikey': self.api_key,
-            'outputsize': output_size
+            'output': output_format
         }
-        
-        response = requests.get(self.base_url, params=params)
-        data = response.json()
-        
-        # Check for API response errors
-        if "Error Message" in data:
-            raise ValueError(f"API Error: {data['Error Message']}")
 
-        # Determine the correct time series key based on the interval
-        time_series_key = f'Time Series ({interval.capitalize()})'
+        response = requests.get(f"{self.base_url}/time_series", params=params)
+        data = response.json()
+        print(data)  # Kiểm tra cấu trúc dữ liệu API trả về
+
+        # Check for API response errors
+        if "message" in data:
+            raise ValueError(f"API Error: {data['message']}")
+
+        # Kiểm tra và xử lý dữ liệu
+        if 'values' not in data or not data['values']:
+            raise ValueError(f"No stock data found for symbol: {symbol}")
+
+        df = pd.DataFrame(data['values'])
+        df['datetime'] = pd.to_datetime(df['datetime'])
+        df = df.set_index('datetime')
         
-        if time_series_key not in data:
-            raise KeyError(f"Expected key '{time_series_key}' not found in response. Please check the stock symbol and API settings.")
+        # Chuyển đổi các cột sang kiểu số
+        numeric_columns = ['open', 'high', 'low', 'close', 'volume']
+        for col in numeric_columns:
+            df[col] = pd.to_numeric(df[col], errors='coerce')
         
-        # Process the data into a DataFrame
-        df = pd.DataFrame.from_dict(data[time_series_key], orient='index')
+        # Loại bỏ các hàng có giá trị NaN
+        df = df.dropna(subset=numeric_columns)
         
-        # Rename columns for clarity
-        df.columns = ['open', 'high', 'low', 'close', 'volume']
-        
-        # Convert column data types to numeric
-        for col in df.columns:
-            df[col] = pd.to_numeric(df[col])
-            
-        # Convert index to datetime
-        df.index = pd.to_datetime(df.index)
+        if df.empty:
+            raise ValueError(f"No valid stock data found for symbol: {symbol}")
         
         return df
