@@ -1,3 +1,7 @@
 .env
-/venv
 /__pycache__
+data/__pycache__/
+models/__pycache__/
+utils/__pycache__/
+visualizations/__pycache__/
+/stock_data
