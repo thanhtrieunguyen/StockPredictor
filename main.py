@@ -11,6 +11,8 @@ from models.linear_regression import LogisticRegressionModel
 from models.naive_bayes import NaiveBayesModel
 from models.pca import PCAModel
 from models.decision_tree import DecisionTreeModel
+from models.random_forest import RandomForestModel 
+import plotly.express as px
 
 def main():
     st.title('Stock Price Prediction App')
@@ -25,7 +27,7 @@ def main():
     
     model_type = st.selectbox(
         'Select Machine Learning Model:',
-        ['Decision Tree', 'KNN', 'Logistic Regression', 'Naive Bayes', 'PCA'],
+        ['Decision Tree', 'KNN', 'Logistic Regression', 'Naive Bayes', 'PCA', 'Random Forest'],
         key="model_select"
     )
     # Update stock data
@@ -60,8 +62,10 @@ def main():
                     model = LogisticRegressionModel()
                 elif model_type == 'Naive Bayes':
                     model = NaiveBayesModel()
-                else:  # PCA
+                elif model_type == 'PCA':
                     model = PCAModel()
+                else:  # Random Forest
+                    model = RandomForestModel()
                 
                 model.train(X_train, y_train)
 
@@ -134,6 +138,20 @@ def main():
             st.subheader('Data Information')
             st.write(f"Data range: {data.index.min().strftime('%Y-%m-%d')} to {data.index.max().strftime('%Y-%m-%d')}")
             st.write(f"Total trading days: {len(data)}")
+
+            st.subheader('Model-Specific Analysis')
+        
+            if model_type == 'Random Forest':
+                # Show feature importance
+                feature_importance = model.get_feature_importance(X.columns)
+                fig_importance = px.bar(
+                    feature_importance,
+                    x='importance',
+                    y='feature',
+                    orientation='h',
+                    title='Feature Importance in Random Forest Model'
+                )
+                st.plotly_chart(fig_importance)
         else:
             st.error('Failed to retrieve stock data. Please check the symbol and try again.')
 
