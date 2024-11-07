@@ -27,7 +27,7 @@ def main():
     
     model_type = st.selectbox(
         'Select Machine Learning Model:',
-        ['Decision Tree', 'KNN', 'Logistic Regression', 'Naive Bayes', 'PCA', 'Random Forest'],
+        ['Decision Tree', 'Random Forest'],
         key="model_select"
     )
     # Update stock data
